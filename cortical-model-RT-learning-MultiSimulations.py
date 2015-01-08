@@ -11,7 +11,7 @@
 import sys
 from dana import *
 import matplotlib.pyplot as plt
-
+import os
 
 # Simulation parameters
 # -----------------------------------------------------------------------------
@@ -164,7 +164,7 @@ Thalamus_mot = zeros((1,n), """dV/dt = (-V + I - Thalamus_h)/(Thalamus_tau);
 # Connectivity
 # -----------------------------------------------------------------------------
 W_str = DenseConnection( Cortex_cog('U'),   Striatum_cog('I'), 1.0)
-init_weights(W_str)
+#init_weights(W_str)
 
 # Simulate basal learning
 if fake_learning:
@@ -221,8 +221,8 @@ if cortical:
     DenseConnection( Cortex_mot('U'), Cortex_ass('I'), K_mot_ass)
     DenseConnection( Cortex_ass('U'), Cortex_mot('I'), K_ass_mot)
     W_cx = DenseConnection( Cortex_ass('U'), Cortex_cog('I'), K_ass_cog)
-    init_weights(W_cx, Wmin = 0.95, Wmax = 1.05)
-    print W_cx.weights
+    #init_weights(W_cx, Wmin = 0.95, Wmax = 1.05)
+
 
     # Simulate cortical learning
 
@@ -287,10 +287,10 @@ decision_time = 0
 
 cues_value = np.ones(4) * 0.5
 cues_reward = np.array([0.75,0.25,0.0,0.0])
-
+total_good = 0
 @after(clock.tick)
 def register(t):
-    global index, decision_time, c1, c2, m1, m2
+    global index, decision_time, c1, c2, m1, m2, total_good
 
     # timesteps[index] = t
 
@@ -304,10 +304,15 @@ def register(t):
         elif mot_choice == m2:
 			cgchoice = c2
 			mchoice = m2
-        if cog_choice == c1:
-			cgchoice = c1
-        elif cog_choice == c2:
-			cgchoice = c2
+        same = cgchoice == cog_choice
+        good = 1 if c1==cgchoice else 0
+        total_good += good
+        #print "cgchoice = ", cgchoice, " good = ", good, " total_good = ", total_good
+        if 0:
+			if cog_choice == c1:
+				cgchoice = c1
+			elif cog_choice == c2:
+				cgchoice = c2
 
         if cgchoice == min(c1,c2):
 			P.append(1)
@@ -348,10 +353,7 @@ def register(t):
 			w = clip(W_cx.weights[mchoice][mchoice*4:(mchoice + 1) * 4] + dw_Cortex, 0.095, 0.105)
 			W_cx.weights[mchoice][mchoice*4:(mchoice + 1) * 4] = w
 
-
-
-
-        if 1:
+        if 0:
 			# Just for displaying ordered cue
 
 			if cgchoice == c1:
@@ -381,61 +383,131 @@ def register(t):
 
 
 # Run simulation
-learning_trials = 50
-D = np.zeros(learning_trials)
+learning_trials = 60
+testing_trials = 20
+simulations = 20
 
-for i in range(learning_trials + 20*4):
+rt = 'Results/RTmean'
+if not os.path.exists(rt):
+	os.makedirs(rt)
+RTmean_Fam_GPi = np.zeros((simulations,2))
+RTmean_UnFam_GPi = np.zeros((simulations,2))
+RTmean_Fam = np.zeros((simulations,2))
+RTmean_UnFam = np.zeros((simulations,2))
+total_good_Fam_GPi = np.zeros((simulations,1))
+total_good_UnFam_GPi = np.zeros((simulations,1))
+total_good_Fam = np.zeros((simulations,1))
+total_good_UnFam = np.zeros((simulations,1))
+save = True
+for simulation in range(simulations):
 
-	# Training session
-	# Learns the two cues
-	if i < learning_trials:
-		D[i] = decision_time
-		print "Trial %d: %.3f" % (i, decision_time)
+	print "Simulation ", simulation + 1
 
-	# Test of the known cues with gpi
-	elif i > learning_trials-1 and i < learning_trials + 20:
-		if i == learning_trials:
-			learning  = False
-			D = np.zeros(20)
-		D[i-learning_trials] = decision_time
-		print "Trial %d: %.3f" % (i-learning_trials, decision_time)
+	gpi      = True
+	familiar = True
+	learning  = True
 
-	# Test of the unknown cues with gpi
-	elif i > learning_trials + 19 and i < learning_trials + 40:
-		if i == learning_trials + 20:
-			d = D[np.nonzero(D)]
-			print "Mean RT: %.3f +/- %.3f\n\n" % (d.mean(), d.std())
+	D = np.zeros(learning_trials)
+	W_cx.weights[np.where(W_cx.weights !=0)] = 0.1
+	init_weights(W_cx, Wmin = 0.95, Wmax = 1.05)
+	W_str.weights[np.where(W_str.weights !=0)] = 1.0
+	init_weights(W_str)
 
-			familiar = False
-			D = np.zeros(20)
-		D[i-learning_trials-20] = decision_time
-		print "Trial %d: %.3f" % (i-learning_trials-20, decision_time)
+	path = 'Results/simulation_' + str(simulation+1)
+	if not os.path.exists(path):
+		os.makedirs(path)
 
-	# Test of the known cues without gpi
-	elif i > learning_trials + 39 and i < learning_trials + 60:
-		if i ==  learning_trials + 40:
-			d = D[np.nonzero(D)]
-			print "Mean RT: %.3f +/- %.3f\n\n" % (d.mean(), d.std())
-			gpi      = False
-			familiar = True
-			D = np.zeros(20)
-		D[i-learning_trials-40] = decision_time
-		print "Trial %d: %.3f" % (i-learning_trials-40, decision_time)
+	for i in range(learning_trials + testing_trials*4):
 
-	# Test of the unknown cues without gpi
-	elif i > learning_trials + 59:
-		if i == learning_trials + 60:
-			d = D[np.nonzero(D)]
-			print "Mean RT: %.3f +/- %.3f\n\n" % (d.mean(), d.std())
-			familiar = False
-			D = np.zeros(20)
-		D[i-learning_trials-60] = decision_time
-		print "Trial %d: %.3f" % (i-learning_trials-60, decision_time)
+		# Training session
+		# Learns the two cues
+		if i < learning_trials:
+			D[i] = decision_time
+			#print "Trial %d: %.3f" % (i, decision_time)
 
-	reset()
-	run(time=duration, dt=dt)
+		# Test of the known cues with gpi
+		elif i > learning_trials-1 and i < learning_trials + testing_trials:
+			if i == learning_trials:
+				if save:
+					file = path + '/_Weights_Cortex.npy'
+					np.save(file,W_cx.weights)
+					file = path + '/_Weights_Striatum.npy'
+					np.save(file,W_str.weights)
+				print "Cortex:\n", W_cx.weights
+				print "Striatum:\n", W_str.weights
+				learning  = False
+				D = np.zeros(testing_trials)
+				print "total_good = ", total_good*100./learning_trials, "\%"
+				total_good = 0
+			D[i-learning_trials] = decision_time
 
-d = D[np.nonzero(D)]
-print "Mean RT: %.3f +/- %.3f\n\n" % (d.mean(), d.std())
-print "Cortex/n", W_cx.weights
-print "Striatum/n", W_str.weights
+		# Test of the unknown cues with gpi
+		elif i > learning_trials + testing_trials - 1 and i < learning_trials + 2*testing_trials:
+			if i == learning_trials + testing_trials:
+
+				d = D[np.nonzero(D)]
+				print "Familiar GPi: \t\t%.3f +/- %.3f" % (d.mean(), d.std())
+				RTmean_Fam_GPi[simulation,:] = np.array([d.mean(), d.std()])
+
+				familiar = False
+				D = np.zeros(testing_trials)
+				print "total_good = ", total_good*100./testing_trials, "%"
+				total_good_Fam_GPi[simulation] = total_good*100./testing_trials
+				total_good = 0
+			D[i-learning_trials-testing_trials] = decision_time
+
+		# Test of the known cues without gpi
+		elif i > learning_trials + 2*testing_trials - 1 and i < learning_trials + 3*testing_trials:
+			if i ==  learning_trials + 2*testing_trials:
+				d = D[np.nonzero(D)]
+				print "UnFamiliar GPi: \t%.3f +/- %.3f" % (d.mean(), d.std())
+				RTmean_UnFam_GPi[simulation,:] = np.array([d.mean(), d.std()])
+
+				gpi      = False
+				familiar = True
+				D = np.zeros(testing_trials)
+				print "total_good = ", total_good*100./testing_trials, "%"
+				total_good_UnFam_GPi[simulation] = total_good*100./testing_trials
+				total_good = 0
+			D[i-learning_trials-2*testing_trials] = decision_time
+
+		# Test of the unknown cues without gpi
+		elif i > learning_trials + 3*testing_trials - 1:
+			if i == learning_trials + 3*testing_trials:
+				d = D[np.nonzero(D)]
+				print "Familiar NoGPi: \t%.3f +/- %.3f" % (d.mean(), d.std())
+				RTmean_Fam[simulation,:] = np.array([d.mean(), d.std()])
+
+				familiar = False
+				D = np.zeros(testing_trials)
+				print "total_good = ", total_good*100./testing_trials, "%"
+				total_good_Fam[simulation] = total_good*100./testing_trials
+				total_good = 0
+			D[i-learning_trials-3*testing_trials] = decision_time
+
+		reset()
+		run(time=duration, dt=dt)
+	d = D[np.nonzero(D)]
+	print "UnFamiliar NoGPi: \t%.3f +/- %.3f\n\n" % (d.mean(), d.std())
+	RTmean_UnFam[simulation,:] = np.array([d.mean(), d.std()])
+	print "total_good = ", total_good*100./testing_trials, "%"
+	total_good_UnFam[simulation] = total_good*100./testing_trials
+	total_good = 0
+if save:
+	file = rt + '/Fam_GPi.npy'
+	np.save(file,RTmean_Fam_GPi)
+	file = rt + '/UnFam_GPi.npy'
+	np.save(file,RTmean_UnFam_GPi)
+	file = rt + '/Fam.npy'
+	np.save(file,RTmean_Fam)
+	file = rt + '/UnFam.npy'
+	np.save(file,RTmean_UnFam)
+
+	file = rt + '/total_good_Fam_GPi.npy'
+	np.save(file,total_good_Fam_GPi)
+	file = rt + '/total_good_UnFam_GPi.npy'
+	np.save(file,total_good_UnFam_GPi)
+	file = rt + '/total_good_Fam.npy'
+	np.save(file,total_good_Fam)
+	file = rt + '/total_good_UnFam.npy'
+	np.save(file,total_good_UnFam)
