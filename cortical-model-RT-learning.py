@@ -195,8 +195,8 @@ DenseConnection( Cortex_mot('U'),   Thalamus_mot('I'),  0.1)
 # DenseConnection( Thalamus_mot('U'), Cortex_mot('I'),    0.4)
 
 # Slower RT with GPi
-DenseConnection( Thalamus_cog('U'), Cortex_cog('I'),    0.3)
-DenseConnection( Thalamus_mot('U'), Cortex_mot('I'),    0.3)
+DenseConnection( Thalamus_cog('U'), Cortex_cog('I'),    0.5)
+DenseConnection( Thalamus_mot('U'), Cortex_mot('I'),    0.5)
 
 if gpi:
     DenseConnection( GPi_cog('U'),      Thalamus_cog('I'), -0.5 )
@@ -286,7 +286,8 @@ index       = 0
 decision_time = 0
 
 cues_value = np.ones(4) * 0.5
-cues_reward = np.array([0.75,0.25,0.0,0.0])
+cues_reward = np.array([3.,1.,0.0,0.0])/4.
+print cues_reward
 
 @after(clock.tick)
 def register(t):
@@ -304,10 +305,6 @@ def register(t):
         elif mot_choice == m2:
 			cgchoice = c2
 			mchoice = m2
-        if cog_choice == c1:
-			cgchoice = c1
-        elif cog_choice == c2:
-			cgchoice = c2
 
         if cgchoice == min(c1,c2):
 			P.append(1)
@@ -315,6 +312,7 @@ def register(t):
 			P.append(0)
 
 		# Compute reward
+		print "cues_reward = ", cues_reward[mchoice], "mchoice = ", mchoice
         reward = np.random.uniform(0,1) < cues_reward[mchoice]
         R.append(reward)
 
